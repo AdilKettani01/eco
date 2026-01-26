@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { RateLimiters } from '@/lib/rate-limit';
+import { sendSMS, isValidPhoneNumber } from '@/lib/sms';
 
 // Generate a random 6-digit code
 function generateCode(): string {
@@ -65,13 +66,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate phone format (Spanish phone numbers)
-    const cleanedPhone = phone.replace(/\s/g, '');
+    let cleanedPhone = phone.replace(/\s/g, '');
+
+    // Convert to E.164 format if Spanish number without country code
+    if (/^[6-9]\d{8}$/.test(cleanedPhone)) {
+      cleanedPhone = '+34' + cleanedPhone;
+    }
+
+    // Validate E.164 format
     const phoneRegex = /^(\+34)?[6-9]\d{8}$/;
     if (!phoneRegex.test(cleanedPhone)) {
       return NextResponse.json(
         { error: 'Formato de teléfono inválido' },
         { status: 400 }
       );
+    }
+
+    // Ensure it starts with +34
+    if (!cleanedPhone.startsWith('+')) {
+      cleanedPhone = '+34' + cleanedPhone.replace(/^34/, '');
     }
 
     // Verify captcha
@@ -128,17 +141,31 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // TODO: Integrate with real SMS service (Twilio, etc.)
-    // For now, log the code to console in development ONLY
-    // SECURITY: Never expose code in API response - only in server logs
+    // Send SMS via MessageBird
+    const smsMessage = `Tu código de verificación EcoLimpio es: ${code}. Válido por 10 minutos.`;
+    const smsResult = await sendSMS(cleanedPhone, smsMessage);
+
+    // Log in development mode
     if (process.env.NODE_ENV === 'development') {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`📱 Verification code for ${cleanedPhone}: ${code}`);
+      console.log(`📨 SMS Status: ${smsResult.success ? '✅ Sent' : '❌ Failed'}`);
+      if (smsResult.messageId) {
+        console.log(`📋 Message ID: ${smsResult.messageId}`);
+      }
+      if (smsResult.error) {
+        console.log(`⚠️ Error: ${smsResult.error}`);
+      }
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 
-    // In production, you would send the SMS here:
-    // await sendSMS(cleanedPhone, `Tu código de verificación EcoLimpio es: ${code}`);
+    // If SMS failed in production, return error
+    if (process.env.NODE_ENV === 'production' && !smsResult.success) {
+      return NextResponse.json(
+        { error: 'No se pudo enviar el código. Intenta de nuevo.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
