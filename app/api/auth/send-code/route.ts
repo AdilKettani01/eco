@@ -8,8 +8,8 @@ function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Verify Google reCAPTCHA token
-async function verifyCaptcha(token: string): Promise<boolean> {
+// Verify Google reCAPTCHA v3 token
+async function verifyCaptcha(token: string, expectedAction: string = 'send_code'): Promise<boolean> {
   const secretKey = process.env.RECAPTCHA_SECRET_KEY;
 
   if (!secretKey) {
@@ -37,7 +37,28 @@ async function verifyCaptcha(token: string): Promise<boolean> {
     );
 
     const data = await response.json();
-    return data.success === true;
+
+    // reCAPTCHA v3 returns a score (0.0 - 1.0)
+    // 0.0 = very likely a bot, 1.0 = very likely a human
+    // Common threshold is 0.5, but you can adjust based on your needs
+    const SCORE_THRESHOLD = 0.5;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🔒 reCAPTCHA v3 Verification:');
+      console.log(`   Success: ${data.success}`);
+      console.log(`   Score: ${data.score} (threshold: ${SCORE_THRESHOLD})`);
+      console.log(`   Action: ${data.action} (expected: ${expectedAction})`);
+      console.log(`   Hostname: ${data.hostname}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+
+    // Check if verification was successful, score is above threshold, and action matches
+    return (
+      data.success === true &&
+      data.score >= SCORE_THRESHOLD &&
+      data.action === expectedAction
+    );
   } catch (error) {
     console.error('Captcha verification error:', error);
     return false;

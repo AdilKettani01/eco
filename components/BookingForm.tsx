@@ -7,16 +7,8 @@ declare global {
   interface Window {
     grecaptcha: {
       ready: (callback: () => void) => void;
-      render: (container: string | HTMLElement, options: {
-        sitekey: string;
-        callback: (token: string) => void;
-        'expired-callback'?: () => void;
-        'error-callback'?: () => void;
-        theme?: 'light' | 'dark';
-      }) => number;
-      reset: (widgetId?: number) => void;
+      execute: (siteKey: string, options: { action: string }) => Promise<string>;
     };
-    onRecaptchaLoad?: () => void;
   }
 }
 
@@ -75,40 +67,12 @@ export default function BookingForm() {
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
 
-  // Google reCAPTCHA state
-  const [captchaToken, setCaptchaToken] = useState('');
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+  // Google reCAPTCHA v3 state
   const [captchaLoaded, setCaptchaLoaded] = useState(false);
-  const recaptchaRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef = useRef<number | null>(null);
 
-  // Load Google reCAPTCHA script
+  // Load Google reCAPTCHA v3 script
   useEffect(() => {
-    if (step === 3 && !captchaLoaded) {
-      // Check if script already exists
-      if (document.querySelector('script[src*="recaptcha"]')) {
-        if (window.grecaptcha) {
-          setCaptchaLoaded(true);
-        }
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit';
-      script.async = true;
-      script.defer = true;
-
-      window.onRecaptchaLoad = () => {
-        setCaptchaLoaded(true);
-      };
-
-      document.body.appendChild(script);
-    }
-  }, [step, captchaLoaded]);
-
-  // Render reCAPTCHA widget when loaded
-  useEffect(() => {
-    if (captchaLoaded && recaptchaRef.current && widgetIdRef.current === null && step === 3) {
+    if (!captchaLoaded) {
       const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
       // SECURITY: Fail if reCAPTCHA is not configured - never use test keys
@@ -118,27 +82,25 @@ export default function BookingForm() {
         return;
       }
 
-      window.grecaptcha.ready(() => {
-        widgetIdRef.current = window.grecaptcha.render(recaptchaRef.current!, {
-          sitekey: siteKey,
-          callback: (token: string) => {
-            setCaptchaToken(token);
-            setCaptchaVerified(true);
-          },
-          'expired-callback': () => {
-            setCaptchaToken('');
-            setCaptchaVerified(false);
-          },
-          'error-callback': () => {
-            setCaptchaToken('');
-            setCaptchaVerified(false);
-            setError('Error al cargar el captcha. Recarga la página.');
-          },
-          theme: 'light',
-        });
-      });
+      // Check if script already exists
+      if (document.querySelector('script[src*="recaptcha"]')) {
+        if (window.grecaptcha) {
+          setCaptchaLoaded(true);
+        }
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setCaptchaLoaded(true);
+      };
+
+      document.body.appendChild(script);
     }
-  }, [captchaLoaded, step]);
+  }, [captchaLoaded]);
 
   const updateData = (key: keyof BookingData, value: string | string[]) => {
     setData(prev => ({ ...prev, [key]: value }));
@@ -180,8 +142,7 @@ export default function BookingForm() {
           data.password === data.confirmPassword &&
           data.phone &&
           validatePhone(data.phone) &&
-          data.address &&
-          captchaVerified
+          data.address
         );
       case 4:
         return codeVerified;
@@ -191,15 +152,22 @@ export default function BookingForm() {
   };
 
   const sendVerificationCode = async () => {
-    if (!captchaToken) {
-      setError('Por favor, completa la verificación de seguridad');
-      return;
-    }
-
     setSendingCode(true);
     setError('');
 
     try {
+      // Get reCAPTCHA v3 token
+      const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+      if (!siteKey) {
+        throw new Error('Error de configuración. Contacta al administrador.');
+      }
+
+      if (!captchaLoaded || !window.grecaptcha) {
+        throw new Error('Verificación de seguridad no cargada. Recarga la página.');
+      }
+
+      const captchaToken = await window.grecaptcha.execute(siteKey, { action: 'send_code' });
+
       const response = await fetch('/api/auth/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -592,24 +560,22 @@ export default function BookingForm() {
                 />
               </div>
 
-              {/* Google reCAPTCHA */}
+              {/* Google reCAPTCHA v3 Badge Info */}
               <div className="pt-4 border-t">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="h-5 w-5 text-[#059669]" />
-                  <span className="text-sm font-medium text-gray-700">Verificación de seguridad</span>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Shield className="h-4 w-4 text-gray-400" />
+                  <span>
+                    Este sitio está protegido por reCAPTCHA y se aplican la{' '}
+                    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-[#059669] hover:underline">
+                      Política de Privacidad
+                    </a>{' '}
+                    y los{' '}
+                    <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-[#059669] hover:underline">
+                      Términos de Servicio
+                    </a>{' '}
+                    de Google.
+                  </span>
                 </div>
-                <div ref={recaptchaRef} className="flex justify-center"></div>
-                {captchaVerified && (
-                  <p className="text-green-600 text-sm mt-2 flex items-center gap-1 justify-center">
-                    <CheckCircle className="h-4 w-4" />
-                    Verificación completada
-                  </p>
-                )}
-                {!captchaLoaded && (
-                  <div className="flex justify-center py-4">
-                    <div className="animate-spin h-6 w-6 border-2 border-[#059669] border-t-transparent rounded-full"></div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
