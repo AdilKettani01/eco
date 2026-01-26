@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { extractHashFromPath, isValidHashFormat } from './lib/session-hash';
-import { prisma } from './lib/prisma';
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const url = request.nextUrl.clone();
 
@@ -24,47 +23,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Check session token
+  // Check session token exists
   const sessionToken = request.cookies.get('session_token')?.value;
   if (!sessionToken) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Verify session and hash match
-  const session = await prisma.session.findFirst({
-    where: {
-      token: sessionToken,
-      accessHash: accessHash,
-    },
-    include: { user: true },
-  });
-
-  if (!session || new Date() > session.expiresAt) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  // Determine rewrite path based on role and requested path
+  // Determine rewrite path based on requested path
   const remainingPath = pathname.substring(accessHash.length + 1); // Remove /[hash]
 
-  // Admin/Staff can only access /admin routes
-  if (session.user.role === 'ADMIN' || session.user.role === 'STAFF') {
-    if (!remainingPath.startsWith('/admin')) {
-      return NextResponse.redirect(new URL(`/${accessHash}/admin/dashboard`, request.url));
-    }
+  // Rewrite hash-based paths to actual routes
+  // Session validation will happen in the page components/API routes
+  if (remainingPath.startsWith('/admin')) {
     // Rewrite /[hash]/admin/* to /admin/*
     url.pathname = remainingPath;
-  } else {
-    // Customers can only access /dashboard
-    if (!remainingPath.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL(`/${accessHash}/dashboard`, request.url));
-    }
+  } else if (remainingPath.startsWith('/dashboard')) {
     // Rewrite /[hash]/dashboard to /dashboard
     url.pathname = remainingPath;
+  } else {
+    // Invalid path after hash, redirect to login
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   const response = NextResponse.rewrite(url);
   response.headers.set('x-session-hash', accessHash);
-  response.headers.set('x-user-role', session.user.role);
 
   return response;
 }

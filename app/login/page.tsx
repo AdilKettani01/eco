@@ -83,7 +83,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
-                  placeholder="admin@ecolimpio.es"
+                  placeholder="tu@email.com"
                   disabled={isLoading}
                 />
               </div>
