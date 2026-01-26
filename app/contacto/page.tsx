@@ -2,7 +2,7 @@ import ContactForm from '@/components/ContactForm';
 import { Leaf, Phone, Mail, MapPin, Clock, MessageCircle } from 'lucide-react';
 
 export default function ContactoPage() {
-  const phoneNumber = '34XXXXXXXXX'; // Replace with actual phone number
+  const phoneNumber = '34603492863'; // Replace with actual phone number
   const message = '¡Hola! Me gustaría solicitar información sobre los servicios de limpieza de EcoLimpio.';
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
@@ -63,7 +63,7 @@ export default function ContactoPage() {
                     </div>
                     <div>
                       <h4 className="font-medium text-gray-900">Teléfono</h4>
-                      <p className="text-gray-600">+34 XXX XXX XXX</p>
+                      <p className="text-gray-600">+34 603492863</p>
                     </div>
                   </div>
 

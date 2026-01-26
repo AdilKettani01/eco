@@ -1,0 +1,105 @@
+// This is your Prisma schema file
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          Role      @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  bookings      Booking[]
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  accessHash  String   @unique // Random 8-char hash for session URL path
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([accessHash])
+  @@index([token])
+  @@index([userId])
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String?       // Nullable for guest bookings
+  user        User?         @relation(fields: [userId], references: [id])
+  services    Json          // JSON array of service IDs (MySQL doesn't support arrays)
+  date        DateTime
+  time        String
+  name        String
+  email       String
+  phone       String
+  address     String        @db.Text
+  notes       String?       @db.Text
+  status      BookingStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@index([date])
+  @@index([userId])
+}
+
+model Contact {
+  id          String        @id @default(cuid())
+  name        String
+  email       String
+  phone       String
+  service     String?
+  message     String        @db.Text
+  status      ContactStatus @default(NEW)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum ContactStatus {
+  NEW
+  READ
+  REPLIED
+  ARCHIVED
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@index([phone, code])
+}

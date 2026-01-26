@@ -1,7 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { Car, Home, Droplets, Sparkles, Calendar, User, CheckCircle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Car, Home, Droplets, Sparkles, Calendar, CheckCircle, ArrowLeft, ArrowRight, Mail, Lock, Phone, MapPin, MessageSquare, Shield } from 'lucide-react';
+
+declare global {
+  interface Window {
+    grecaptcha: {
+      ready: (callback: () => void) => void;
+      render: (container: string | HTMLElement, options: {
+        sitekey: string;
+        callback: (token: string) => void;
+        'expired-callback'?: () => void;
+        'error-callback'?: () => void;
+        theme?: 'light' | 'dark';
+      }) => number;
+      reset: (widgetId?: number) => void;
+    };
+    onRecaptchaLoad?: () => void;
+  }
+}
 
 interface BookingData {
   // Step 1: Service selection
@@ -9,9 +26,11 @@ interface BookingData {
   // Step 2: Date and time
   date: string;
   time: string;
-  // Step 3: Contact info
+  // Step 3: Account & Contact info
   name: string;
   email: string;
+  password: string;
+  confirmPassword: string;
   phone: string;
   address: string;
   notes: string;
@@ -23,6 +42,8 @@ const initialData: BookingData = {
   time: '',
   name: '',
   email: '',
+  password: '',
+  confirmPassword: '',
   phone: '',
   address: '',
   notes: '',
@@ -44,9 +65,84 @@ export default function BookingForm() {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<BookingData>(initialData);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // SMS Verification state
+  const [verificationCode, setVerificationCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeVerified, setCodeVerified] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+
+  // Google reCAPTCHA state
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaLoaded, setCaptchaLoaded] = useState(false);
+  const recaptchaRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<number | null>(null);
+
+  // Load Google reCAPTCHA script
+  useEffect(() => {
+    if (step === 3 && !captchaLoaded) {
+      // Check if script already exists
+      if (document.querySelector('script[src*="recaptcha"]')) {
+        if (window.grecaptcha) {
+          setCaptchaLoaded(true);
+        }
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit';
+      script.async = true;
+      script.defer = true;
+
+      window.onRecaptchaLoad = () => {
+        setCaptchaLoaded(true);
+      };
+
+      document.body.appendChild(script);
+    }
+  }, [step, captchaLoaded]);
+
+  // Render reCAPTCHA widget when loaded
+  useEffect(() => {
+    if (captchaLoaded && recaptchaRef.current && widgetIdRef.current === null && step === 3) {
+      const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+
+      // SECURITY: Fail if reCAPTCHA is not configured - never use test keys
+      if (!siteKey) {
+        console.error('CRITICAL: NEXT_PUBLIC_RECAPTCHA_SITE_KEY not configured');
+        setError('Error de configuración. Contacta al administrador.');
+        return;
+      }
+
+      window.grecaptcha.ready(() => {
+        widgetIdRef.current = window.grecaptcha.render(recaptchaRef.current!, {
+          sitekey: siteKey,
+          callback: (token: string) => {
+            setCaptchaToken(token);
+            setCaptchaVerified(true);
+          },
+          'expired-callback': () => {
+            setCaptchaToken('');
+            setCaptchaVerified(false);
+          },
+          'error-callback': () => {
+            setCaptchaToken('');
+            setCaptchaVerified(false);
+            setError('Error al cargar el captcha. Recarga la página.');
+          },
+          theme: 'light',
+        });
+      });
+    }
+  }, [captchaLoaded, step]);
 
   const updateData = (key: keyof BookingData, value: string | string[]) => {
     setData(prev => ({ ...prev, [key]: value }));
+    setError('');
   };
 
   const toggleService = (serviceId: string) => {
@@ -58,29 +154,154 @@ export default function BookingForm() {
     }
   };
 
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const validatePhone = (phone: string) => {
+    // Spanish phone format: +34 or 6/7/9 followed by 8 digits
+    const cleaned = phone.replace(/\s/g, '');
+    return /^(\+34)?[679]\d{8}$/.test(cleaned);
+  };
+
   const canProceed = () => {
     switch (step) {
-      case 1: return data.services.length > 0;
-      case 2: return data.date && data.time;
-      case 3: return data.name && data.email && data.phone && data.address;
-      default: return false;
+      case 1:
+        return data.services.length > 0;
+      case 2:
+        return data.date && data.time;
+      case 3:
+        return (
+          data.name &&
+          data.email &&
+          validateEmail(data.email) &&
+          data.password &&
+          data.password.length >= 6 &&
+          data.password === data.confirmPassword &&
+          data.phone &&
+          validatePhone(data.phone) &&
+          data.address &&
+          captchaVerified
+        );
+      case 4:
+        return codeVerified;
+      default:
+        return false;
     }
   };
 
-  const handleSubmit = () => {
-    // In a real app, this would send to an API
-    console.log('Booking submitted:', data);
-    setIsSubmitted(true);
+  const sendVerificationCode = async () => {
+    if (!captchaToken) {
+      setError('Por favor, completa la verificación de seguridad');
+      return;
+    }
+
+    setSendingCode(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: data.phone, captchaToken }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al enviar el código');
+      }
+
+      setCodeSent(true);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Error al enviar el código');
+    } finally {
+      setSendingCode(false);
+    }
   };
 
-  // Get minimum date (tomorrow)
+  const verifyCode = async () => {
+    if (verificationCode.length !== 6) {
+      setError('El código debe tener 6 dígitos');
+      return;
+    }
+
+    setVerifyingCode(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: data.phone,
+          code: verificationCode,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Código incorrecto');
+      }
+
+      setCodeVerified(true);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Error al verificar el código');
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!codeVerified) {
+      setError('Debes verificar tu número de teléfono');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Create user account and booking together
+      const response = await fetch('/api/bookings/with-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // User data
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          phone: data.phone,
+          // Booking data
+          services: data.services,
+          date: data.date,
+          time: data.time,
+          address: data.address,
+          notes: data.notes,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al crear la reserva');
+      }
+
+      setIsSubmitted(true);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Error al enviar la reserva');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getMinDate = () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().split('T')[0];
   };
 
-  // Get maximum date (3 months from now)
   const getMaxDate = () => {
     const maxDate = new Date();
     maxDate.setMonth(maxDate.getMonth() + 3);
@@ -93,9 +314,9 @@ export default function BookingForm() {
         <div className="w-20 h-20 bg-[#059669]/10 rounded-full flex items-center justify-center mx-auto mb-6">
           <CheckCircle className="h-10 w-10 text-[#059669]" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">¡Reserva Confirmada!</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">¡Cuenta Creada y Reserva Confirmada!</h2>
         <p className="text-gray-600 mb-6">
-          Hemos recibido tu solicitud de reserva. Te contactaremos en las próximas 24 horas para confirmar los detalles.
+          Tu cuenta ha sido creada exitosamente. Te contactaremos en las próximas 24 horas para confirmar los detalles de tu reserva.
         </p>
         <div className="bg-gray-50 rounded-lg p-6 text-left mb-6">
           <h3 className="font-semibold text-gray-900 mb-4">Resumen de tu reserva:</h3>
@@ -107,9 +328,17 @@ export default function BookingForm() {
             <p><span className="text-gray-500">Dirección:</span> {data.address}</p>
           </div>
         </div>
-        <p className="text-sm text-gray-500">
-          Si tienes alguna pregunta, no dudes en contactarnos por WhatsApp o email.
-        </p>
+        <div className="bg-blue-50 rounded-lg p-4 mb-6">
+          <p className="text-sm text-blue-800">
+            <strong>Accede a tu cuenta:</strong> Puedes iniciar sesión con tu email y contraseña para ver tus reservas.
+          </p>
+        </div>
+        <a
+          href="/login"
+          className="inline-block bg-[#059669] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#047857] transition-colors"
+        >
+          Iniciar Sesión
+        </a>
       </div>
     );
   }
@@ -118,8 +347,8 @@ export default function BookingForm() {
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
       {/* Progress Steps */}
       <div className="bg-gray-50 px-6 py-4">
-        <div className="flex items-center justify-between max-w-md mx-auto">
-          {[1, 2, 3].map((s) => (
+        <div className="flex items-center justify-between max-w-lg mx-auto">
+          {[1, 2, 3, 4].map((s) => (
             <div key={s} className="flex items-center">
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
@@ -130,9 +359,9 @@ export default function BookingForm() {
               >
                 {step > s ? <CheckCircle className="h-5 w-5" /> : s}
               </div>
-              {s < 3 && (
+              {s < 4 && (
                 <div
-                  className={`w-16 sm:w-24 h-1 mx-2 ${
+                  className={`w-12 sm:w-16 h-1 mx-1 sm:mx-2 ${
                     step > s ? 'bg-[#059669]' : 'bg-gray-200'
                   }`}
                 />
@@ -140,14 +369,21 @@ export default function BookingForm() {
             </div>
           ))}
         </div>
-        <div className="flex justify-between max-w-md mx-auto mt-2 text-xs text-gray-500">
+        <div className="flex justify-between max-w-lg mx-auto mt-2 text-xs text-gray-500">
           <span>Servicios</span>
-          <span>Fecha y Hora</span>
-          <span>Datos</span>
+          <span>Fecha</span>
+          <span>Cuenta</span>
+          <span>Verificar</span>
         </div>
       </div>
 
       <div className="p-6">
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Step 1: Service Selection */}
         {step === 1 && (
           <div>
@@ -194,7 +430,6 @@ export default function BookingForm() {
             <p className="text-gray-600 mb-6">Selecciona cuándo te gustaría recibir el servicio.</p>
 
             <div className="space-y-6">
-              {/* Date Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Calendar className="h-4 w-4 inline mr-2" />
@@ -210,7 +445,6 @@ export default function BookingForm() {
                 />
               </div>
 
-              {/* Time Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Hora preferida
@@ -235,13 +469,14 @@ export default function BookingForm() {
           </div>
         )}
 
-        {/* Step 3: Contact Information */}
+        {/* Step 3: Account & Contact Information */}
         {step === 3 && (
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Tus datos de contacto</h2>
-            <p className="text-gray-600 mb-6">Necesitamos estos datos para confirmar tu reserva.</p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Crea tu cuenta</h2>
+            <p className="text-gray-600 mb-6">Completa tus datos para crear tu cuenta y realizar la reserva.</p>
 
             <div className="space-y-4">
+              {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre completo *
@@ -250,40 +485,88 @@ export default function BookingForm() {
                   type="text"
                   value={data.name}
                   onChange={(e) => updateData('name', e.target.value)}
-                  placeholder="Tu nombre"
+                  placeholder="Tu nombre completo"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
                 />
               </div>
 
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Mail className="h-4 w-4 inline mr-1" />
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={data.email}
+                  onChange={(e) => updateData('email', e.target.value)}
+                  placeholder="tu@email.com"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
+                />
+                {data.email && !validateEmail(data.email) && (
+                  <p className="text-red-500 text-xs mt-1">Email inválido</p>
+                )}
+              </div>
+
+              {/* Password */}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email *
+                    <Lock className="h-4 w-4 inline mr-1" />
+                    Contraseña *
                   </label>
                   <input
-                    type="email"
-                    value={data.email}
-                    onChange={(e) => updateData('email', e.target.value)}
-                    placeholder="tu@email.com"
+                    type="password"
+                    value={data.password}
+                    onChange={(e) => updateData('password', e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
                   />
+                  {data.password && data.password.length < 6 && (
+                    <p className="text-red-500 text-xs mt-1">Mínimo 6 caracteres</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Teléfono *
+                    <Lock className="h-4 w-4 inline mr-1" />
+                    Confirmar contraseña *
                   </label>
                   <input
-                    type="tel"
-                    value={data.phone}
-                    onChange={(e) => updateData('phone', e.target.value)}
-                    placeholder="+34 XXX XXX XXX"
+                    type="password"
+                    value={data.confirmPassword}
+                    onChange={(e) => updateData('confirmPassword', e.target.value)}
+                    placeholder="Repite la contraseña"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
                   />
+                  {data.confirmPassword && data.password !== data.confirmPassword && (
+                    <p className="text-red-500 text-xs mt-1">Las contraseñas no coinciden</p>
+                  )}
                 </div>
               </div>
 
+              {/* Phone */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Phone className="h-4 w-4 inline mr-1" />
+                  Teléfono móvil *
+                </label>
+                <input
+                  type="tel"
+                  value={data.phone}
+                  onChange={(e) => updateData('phone', e.target.value)}
+                  placeholder="+34 612 345 678"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
+                />
+                {data.phone && !validatePhone(data.phone) && (
+                  <p className="text-red-500 text-xs mt-1">Formato: +34 6XX XXX XXX</p>
+                )}
+                <p className="text-gray-500 text-xs mt-1">Te enviaremos un código de verificación</p>
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <MapPin className="h-4 w-4 inline mr-1" />
                   Dirección del servicio *
                 </label>
                 <input
@@ -295,6 +578,7 @@ export default function BookingForm() {
                 />
               </div>
 
+              {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Notas adicionales (opcional)
@@ -302,11 +586,117 @@ export default function BookingForm() {
                 <textarea
                   value={data.notes}
                   onChange={(e) => updateData('notes', e.target.value)}
-                  placeholder="Cualquier información adicional que debamos saber..."
+                  placeholder="Cualquier información adicional..."
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent resize-none"
                 />
               </div>
+
+              {/* Google reCAPTCHA */}
+              <div className="pt-4 border-t">
+                <div className="flex items-center gap-2 mb-3">
+                  <Shield className="h-5 w-5 text-[#059669]" />
+                  <span className="text-sm font-medium text-gray-700">Verificación de seguridad</span>
+                </div>
+                <div ref={recaptchaRef} className="flex justify-center"></div>
+                {captchaVerified && (
+                  <p className="text-green-600 text-sm mt-2 flex items-center gap-1 justify-center">
+                    <CheckCircle className="h-4 w-4" />
+                    Verificación completada
+                  </p>
+                )}
+                {!captchaLoaded && (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin h-6 w-6 border-2 border-[#059669] border-t-transparent rounded-full"></div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Phone Verification */}
+        {step === 4 && (
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Verifica tu teléfono</h2>
+            <p className="text-gray-600 mb-6">
+              Enviaremos un código SMS al número <strong>{data.phone}</strong>
+            </p>
+
+            <div className="max-w-md mx-auto space-y-6">
+              {!codeSent ? (
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-[#059669]/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <MessageSquare className="h-10 w-10 text-[#059669]" />
+                  </div>
+                  <p className="text-gray-600 mb-6">
+                    Haz clic en el botón para recibir tu código de verificación
+                  </p>
+                  <button
+                    onClick={sendVerificationCode}
+                    disabled={sendingCode}
+                    className="bg-[#059669] text-white px-8 py-3 rounded-lg font-medium hover:bg-[#047857] transition-colors disabled:bg-gray-300"
+                  >
+                    {sendingCode ? (
+                      <span className="flex items-center space-x-2">
+                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Enviando...</span>
+                      </span>
+                    ) : (
+                      'Enviar código SMS'
+                    )}
+                  </button>
+                </div>
+              ) : !codeVerified ? (
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Phone className="h-10 w-10 text-blue-600" />
+                  </div>
+                  <p className="text-gray-600 mb-6">
+                    Introduce el código de 6 dígitos que hemos enviado a tu teléfono
+                  </p>
+                  <div className="mb-6">
+                    <input
+                      type="text"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      maxLength={6}
+                      className="w-48 text-center text-2xl tracking-widest px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
+                    />
+                  </div>
+                  <button
+                    onClick={verifyCode}
+                    disabled={verifyingCode || verificationCode.length !== 6}
+                    className="bg-[#059669] text-white px-8 py-3 rounded-lg font-medium hover:bg-[#047857] transition-colors disabled:bg-gray-300"
+                  >
+                    {verifyingCode ? 'Verificando...' : 'Verificar código'}
+                  </button>
+                  <p className="text-sm text-gray-500 mt-4">
+                    ¿No recibiste el código?{' '}
+                    <button
+                      onClick={sendVerificationCode}
+                      disabled={sendingCode}
+                      className="text-[#059669] hover:underline"
+                    >
+                      Reenviar
+                    </button>
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <CheckCircle className="h-10 w-10 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">¡Teléfono verificado!</h3>
+                  <p className="text-gray-600">
+                    Tu número ha sido verificado correctamente. Haz clic en "Confirmar Reserva" para completar.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -314,7 +704,10 @@ export default function BookingForm() {
         {/* Navigation Buttons */}
         <div className="flex justify-between mt-8 pt-6 border-t">
           <button
-            onClick={() => setStep(step - 1)}
+            onClick={() => {
+              setStep(step - 1);
+              setError('');
+            }}
             disabled={step === 1}
             className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-colors ${
               step === 1
@@ -326,7 +719,7 @@ export default function BookingForm() {
             <span>Anterior</span>
           </button>
 
-          {step < 3 ? (
+          {step < 4 ? (
             <button
               onClick={() => setStep(step + 1)}
               disabled={!canProceed()}
@@ -342,15 +735,27 @@ export default function BookingForm() {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={!canProceed()}
+              disabled={!codeVerified || isLoading}
               className={`flex items-center space-x-2 px-8 py-3 rounded-lg font-medium transition-colors ${
-                canProceed()
+                codeVerified && !isLoading
                   ? 'bg-[#059669] text-white hover:bg-[#047857]'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
             >
-              <span>Confirmar Reserva</span>
-              <CheckCircle className="h-5 w-5" />
+              {isLoading ? (
+                <span className="flex items-center space-x-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Procesando...</span>
+                </span>
+              ) : (
+                <>
+                  <span>Confirmar Reserva</span>
+                  <CheckCircle className="h-5 w-5" />
+                </>
+              )}
             </button>
           )}
         </div>

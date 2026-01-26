@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
-import { Menu, X, Leaf } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,19 +12,19 @@ export default function Navbar() {
     { href: '/', label: 'Inicio' },
     { href: '/servicios', label: 'Servicios' },
     { href: '/precios', label: 'Precios' },
-    { href: '/reservar', label: 'Reservar' },
     { href: '/contacto', label: 'Contacto' },
+    { href: '/login', label: 'Iniciar sesión' },
   ];
 
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="relative flex justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
-              <Leaf className="h-8 w-8 text-[#059669]" />
-              <span className="text-2xl font-bold text-[#059669]">EcoLimpio</span>
+          <div className=" flex items-center">
+            <Link href="/" className="flex items-center">
+              <Image src="/Logo.svg" alt="EcoLimpio" width={40} height={20} priority />
+              <h1 className=" ml-3 font-regular font-inter text-3xl text-[#81ceb3]"> <span className='font-bold font-inter text-[#278F64]'>Eco</span>Limpio</h1>
             </Link>
           </div>
 

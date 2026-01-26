@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Sparkles, Shield, Clock, Leaf } from 'lucide-react';
+import Ecology from '@/app/eco-ecology-energy-2-svgrepo-com.svg'
 
 export default function Hero() {
   return (
@@ -65,7 +67,7 @@ export default function Hero() {
               <div className="w-80 h-80 bg-white/10 rounded-full flex items-center justify-center">
                 <div className="w-64 h-64 bg-white/10 rounded-full flex items-center justify-center">
                   <div className="w-48 h-48 bg-white/20 rounded-full flex items-center justify-center">
-                    <Leaf className="w-24 h-24 text-[#84cc16]" />
+                    <Image src={Ecology} alt="Ecology" width={150} height={150} />
                   </div>
                 </div>
               </div>

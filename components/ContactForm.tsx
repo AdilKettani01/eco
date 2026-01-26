@@ -74,12 +74,28 @@ export default function ContactForm() {
 
     setIsSubmitting(true);
 
-    // Simulate API call - in production, you'd send to Formspree or your backend
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const response = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
 
-    console.log('Contact form submitted:', data);
-    setIsSubmitting(false);
-    setIsSubmitted(true);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send message');
+      }
+
+      setIsSubmitting(false);
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error('Error submitting contact form:', error);
+      setIsSubmitting(false);
+      alert('Hubo un error al enviar el mensaje. Por favor, inténtalo de nuevo.');
+    }
   };
 
   if (isSubmitted) {

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Leaf, Phone, Mail, MapPin, Clock, Facebook, Instagram } from 'lucide-react';
+import Image from 'next/image';
+import { Phone, Mail, MapPin, Clock, Facebook, Instagram } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -8,10 +9,12 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="col-span-1 md:col-span-1">
-            <div className="flex items-center space-x-2 mb-4">
-              <Leaf className="h-8 w-8 text-[#84cc16]" />
-              <span className="text-2xl font-bold">EcoLimpio</span>
-            </div>
+            <div className=" flex items-center mb-10">
+            <Link href="/" className="flex items-center">
+              <Image src="/Logo.svg" alt="EcoLimpio" width={40} height={20} priority />
+              <h1 className=" ml-3 font-regular font-inter text-3xl text-[#81ceb3]"> <span className='font-bold font-inter text-[#278F64]'>Eco</span>Limpio</h1>
+            </Link>
+          </div>
             <p className="text-gray-400 mb-4">
               Limpieza ecológica profesional para tu hogar, vehículo y espacios exteriores en Barcelona.
             </p>
