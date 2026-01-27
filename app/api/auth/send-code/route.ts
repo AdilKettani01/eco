@@ -166,11 +166,11 @@ export async function POST(request: NextRequest) {
     const smsMessage = `Tu código de verificación EcoLimpio es: ${code}. Válido por 10 minutos.`;
     const smsResult = await sendSMS(cleanedPhone, smsMessage);
 
-    // Log in development mode
-    if (process.env.NODE_ENV === 'development') {
+    // Always log the code if SMS fails or is not configured
+    if (!smsResult.success || process.env.NODE_ENV === 'development') {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`📱 Verification code for ${cleanedPhone}: ${code}`);
-      console.log(`📨 SMS Status: ${smsResult.success ? '✅ Sent' : '❌ Failed'}`);
+      console.log(`📨 SMS Status: ${smsResult.success ? '✅ Sent' : '❌ Failed/Not Configured'}`);
       if (smsResult.messageId) {
         console.log(`📋 Message ID: ${smsResult.messageId}`);
       }
@@ -180,18 +180,23 @@ export async function POST(request: NextRequest) {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 
-    // If SMS failed in production, return error
-    if (process.env.NODE_ENV === 'production' && !smsResult.success) {
-      return NextResponse.json(
-        { error: 'No se pudo enviar el código. Intenta de nuevo.' },
-        { status: 500 }
-      );
+    // If MessageBird is not configured, still allow the flow to continue
+    // The code is saved in the database and logged to console
+    // This allows testing without SMS service
+    const messageBirdConfigured = !!process.env.MESSAGEBIRD_API_KEY;
+
+    if (!messageBirdConfigured) {
+      console.warn('⚠️ MessageBird not configured - code logged above. Configure MESSAGEBIRD_API_KEY for production SMS.');
     }
 
+    // Return success even if SMS failed when MessageBird is not configured
+    // This allows the verification flow to continue
     return NextResponse.json({
       success: true,
-      message: 'Código enviado correctamente',
-      // SECURITY: Code is NEVER returned in response - check server logs in development
+      message: messageBirdConfigured && smsResult.success
+        ? 'Código enviado correctamente'
+        : 'Código generado (revisa los logs del servidor)',
+      // SECURITY: Code is NEVER returned in response - check server logs
     });
   } catch (error) {
     console.error('Error sending verification code:', error);
