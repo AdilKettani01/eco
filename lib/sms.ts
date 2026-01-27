@@ -1,7 +1,9 @@
 import messagebird from 'messagebird';
 
 // Initialize MessageBird client
+// @ts-ignore - messagebird types are not correctly defined
 const messageBirdClient = process.env.MESSAGEBIRD_API_KEY
+  // @ts-ignore
   ? messagebird(process.env.MESSAGEBIRD_API_KEY)
   : null;
 
