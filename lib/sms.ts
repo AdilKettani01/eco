@@ -1,11 +1,14 @@
 import messagebird from 'messagebird';
 
-// Initialize MessageBird client
-// @ts-ignore - messagebird types are not correctly defined
-const messageBirdClient = process.env.MESSAGEBIRD_API_KEY
-  // @ts-ignore
-  ? messagebird(process.env.MESSAGEBIRD_API_KEY)
-  : null;
+// Lazy initialization of MessageBird client
+// This ensures environment variables are loaded at runtime, not build time
+function getMessageBirdClient() {
+  if (!process.env.MESSAGEBIRD_API_KEY) {
+    return null;
+  }
+  // @ts-ignore - messagebird types are not correctly defined
+  return messagebird(process.env.MESSAGEBIRD_API_KEY);
+}
 
 export interface SendSMSResult {
   success: boolean;
@@ -28,6 +31,9 @@ export async function sendSMS(to: string, message: string): Promise<SendSMSResul
       messageId: 'dev-message-' + Date.now(),
     };
   }
+
+  // Get MessageBird client (lazy initialization)
+  const messageBirdClient = getMessageBirdClient();
 
   // Check if MessageBird is configured
   if (!messageBirdClient) {
