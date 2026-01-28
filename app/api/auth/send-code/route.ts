@@ -180,20 +180,20 @@ export async function POST(request: NextRequest) {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 
-    // If MessageBird is not configured, still allow the flow to continue
+    // If Bird API is not configured, still allow the flow to continue
     // The code is saved in the database and logged to console
     // This allows testing without SMS service
-    const messageBirdConfigured = !!process.env.MESSAGEBIRD_API_KEY;
+    const birdConfigured = !!process.env.BIRD_API_KEY;
 
-    if (!messageBirdConfigured) {
-      console.warn('⚠️ MessageBird not configured - code logged above. Configure MESSAGEBIRD_API_KEY for production SMS.');
+    if (!birdConfigured) {
+      console.warn('⚠️ Bird API not configured - code logged above. Configure BIRD_API_KEY for production SMS.');
     }
 
-    // Return success even if SMS failed when MessageBird is not configured
+    // Return success even if SMS failed when Bird is not configured
     // This allows the verification flow to continue
     return NextResponse.json({
       success: true,
-      message: messageBirdConfigured && smsResult.success
+      message: birdConfigured && smsResult.success
         ? 'Código enviado correctamente'
         : 'Código generado (revisa los logs del servidor)',
       // SECURITY: Code is NEVER returned in response - check server logs

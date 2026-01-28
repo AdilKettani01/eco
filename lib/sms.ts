@@ -1,14 +1,5 @@
-import messagebird from 'messagebird';
-
-// Lazy initialization of MessageBird client
-// This ensures environment variables are loaded at runtime, not build time
-function getMessageBirdClient() {
-  if (!process.env.MESSAGEBIRD_API_KEY) {
-    return null;
-  }
-  // @ts-ignore - messagebird types are not correctly defined
-  return messagebird(process.env.MESSAGEBIRD_API_KEY);
-}
+// Bird API configuration
+const BIRD_API_URL = process.env.BIRD_API_URL || 'https://api.bird.com/workspaces/085a7bc1-6344-4b44-9433-5d4dc16e6806/channels/f0b8d52c-d76a-5465-82ca-f09b90dbf2f3/messages';
 
 export interface SendSMSResult {
   success: boolean;
@@ -17,7 +8,7 @@ export interface SendSMSResult {
 }
 
 /**
- * Send SMS using MessageBird
+ * Send SMS using Bird API
  * @param to - Phone number in E.164 format (e.g., +34612345678)
  * @param message - SMS message content
  * @returns Promise with result containing success status and messageId or error
@@ -32,12 +23,10 @@ export async function sendSMS(to: string, message: string): Promise<SendSMSResul
     };
   }
 
-  // Get MessageBird client (lazy initialization)
-  const messageBirdClient = getMessageBirdClient();
-
-  // Check if MessageBird is configured
-  if (!messageBirdClient) {
-    console.error('❌ MessageBird API key not configured');
+  // Check if Bird API key is configured
+  const apiKey = process.env.BIRD_API_KEY;
+  if (!apiKey) {
+    console.error('❌ Bird API key not configured');
     return {
       success: false,
       error: 'SMS service not configured',
@@ -45,44 +34,52 @@ export async function sendSMS(to: string, message: string): Promise<SendSMSResul
   }
 
   try {
-    // Send SMS via MessageBird
-    const result = await new Promise<any>((resolve, reject) => {
-      messageBirdClient.messages.create(
-        {
-          originator: 'EcoLimpio', // Sender name (max 11 alphanumeric chars)
-          recipients: [to],
-          body: message,
+    const response = await fetch(BIRD_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `AccessKey ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        body: {
+          type: 'text',
+          text: {
+            text: message,
+          },
         },
-        (err: any, response: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(response);
-          }
-        }
-      );
+        receiver: {
+          contacts: [
+            {
+              identifierValue: to,
+              identifierKey: 'phonenumber',
+            },
+          ],
+        },
+      }),
     });
 
-    console.log(`✅ SMS sent successfully to ${to}, MessageBird ID: ${result.id}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ Bird API error:', response.status, errorData);
+      return {
+        success: false,
+        error: errorData.message || `HTTP ${response.status}: Failed to send SMS`,
+      };
+    }
+
+    const result = await response.json();
+    console.log(`✅ SMS sent successfully to ${to}, Bird ID: ${result.id}`);
 
     return {
       success: true,
       messageId: result.id,
     };
   } catch (error: any) {
-    console.error('❌ Failed to send SMS via MessageBird:', error);
-
-    // Extract error message
-    let errorMessage = 'Failed to send SMS';
-    if (error.errors && error.errors.length > 0) {
-      errorMessage = error.errors[0].description || errorMessage;
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
+    console.error('❌ Failed to send SMS via Bird:', error);
 
     return {
       success: false,
-      error: errorMessage,
+      error: error.message || 'Failed to send SMS',
     };
   }
 }

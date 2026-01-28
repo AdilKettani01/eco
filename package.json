@@ -21,7 +21,6 @@
     "bcrypt": "^5.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.468.0",
-    "messagebird": "^4.0.1",
     "nanoid": "^5.0.9",
     "next": "14.2.21",
     "react": "^18.3.1",
