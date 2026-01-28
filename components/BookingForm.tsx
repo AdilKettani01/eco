@@ -126,6 +126,16 @@ export default function BookingForm() {
     return /^(\+34)?[679]\d{8}$/.test(cleaned);
   };
 
+  const validatePasswordStrength = (password: string) => {
+    // Must match backend validation in lib/auth-guard.ts
+    return (
+      password.length >= 8 &&
+      /[A-Z]/.test(password) &&
+      /[a-z]/.test(password) &&
+      /[0-9]/.test(password)
+    );
+  };
+
   const canProceed = () => {
     switch (step) {
       case 1:
@@ -138,7 +148,7 @@ export default function BookingForm() {
           data.email &&
           validateEmail(data.email) &&
           data.password &&
-          data.password.length >= 6 &&
+          validatePasswordStrength(data.password) &&
           data.password === data.confirmPassword &&
           data.phone &&
           validatePhone(data.phone) &&
@@ -487,11 +497,13 @@ export default function BookingForm() {
                     type="password"
                     value={data.password}
                     onChange={(e) => updateData('password', e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mín. 8 caracteres"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#059669] focus:border-transparent"
                   />
-                  {data.password && data.password.length < 6 && (
-                    <p className="text-red-500 text-xs mt-1">Mínimo 6 caracteres</p>
+                  {data.password && !validatePasswordStrength(data.password) && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Mín. 8 caracteres, 1 mayúscula, 1 minúscula, 1 número
+                    </p>
                   )}
                 </div>
                 <div>

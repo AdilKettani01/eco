@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Clean phone number
-    const cleanedPhone = phone.replace(/\s/g, '');
+    // Clean and normalize phone number to E.164 format
+    let cleanedPhone = phone.replace(/\s/g, '');
 
     // Validate phone format
     const phoneRegex = /^(\+34)?[6-9]\d{8}$/;
@@ -36,6 +36,11 @@ export async function POST(request: NextRequest) {
         { error: 'Formato de teléfono inválido' },
         { status: 400 }
       );
+    }
+
+    // Normalize to +34 format (must match send-code storage format)
+    if (!cleanedPhone.startsWith('+34')) {
+      cleanedPhone = '+34' + cleanedPhone;
     }
 
     // Validate code format (6 digits)
