@@ -30,9 +30,9 @@ export async function sendEmail(
     };
   }
 
-  const apiKey = process.env.BIRD_API_KEY;
+  const apiKey = process.env.BIRD_EMAIL_API_KEY;
   if (!apiKey) {
-    console.error('❌ Bird API key not configured');
+    console.error('❌ Bird EMAIL API key not configured');
     return {
       success: false,
       error: 'Email service not configured',
