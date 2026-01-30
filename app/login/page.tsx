@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 
@@ -107,6 +108,15 @@ export default function LoginPage() {
                   disabled={isLoading}
                 />
               </div>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-[#059669] hover:text-[#047857] transition-colors"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
             </div>
 
             {/* Submit Button */}

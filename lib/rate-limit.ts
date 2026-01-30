@@ -125,6 +125,13 @@ export const RateLimiters = {
       maxRequests: 3,
     }),
 
+  // Password reset: 5 requests per hour
+  passwordReset: (request: NextRequest) =>
+    rateLimitByIP(request, 'password-reset', {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 5,
+    }),
+
   // Contact form: 5 submissions per hour
   contactForm: (request: NextRequest) =>
     rateLimitByIP(request, 'contact', {
