@@ -166,8 +166,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!process.env.BIRD_EMAIL_API_KEY) {
-      console.warn('⚠️ Bird EMAIL API key not configured - reset link logged in development only.');
+    if (!process.env.BIRD_API_KEY) {
+      console.warn('⚠️ Bird API key not configured - reset link logged in development only.');
     }
 
     return NextResponse.json(genericResponse);
