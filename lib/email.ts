@@ -1,7 +1,12 @@
-// Bird API configuration for email channel
+// Bird API configuration for email
 const BIRD_EMAIL_API_URL =
   process.env.BIRD_EMAIL_API_URL ||
   'https://api.bird.com/workspaces/085a7bc1-6344-4b44-9433-5d4dc16e6806/channels/dca724f2-ce21-55e5-9a7c-68ab4875f81f/messages';
+const DEFAULT_FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ecolimpio.es';
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
 export interface SendEmailResult {
   success: boolean;
@@ -40,31 +45,50 @@ export async function sendEmail(
   }
 
   try {
+    const useReachTransmissions = /\/reach\/transmissions/.test(BIRD_EMAIL_API_URL);
+    const body = useReachTransmissions
+      ? {
+          recipients: [
+            {
+              address: {
+                email: to,
+              },
+            },
+          ],
+          content: {
+            from: DEFAULT_FROM_EMAIL,
+            subject,
+            html,
+            text: stripHtml(html),
+          },
+        }
+      : {
+          receiver: {
+            contacts: [
+              {
+                identifierKey: 'emailaddress',
+                identifierValue: to,
+              },
+            ],
+          },
+          body: {
+            type: 'html',
+            html: {
+              text: html,
+              metadata: {
+                subject,
+              },
+            },
+          },
+        };
+
     const response = await fetch(BIRD_EMAIL_API_URL, {
       method: 'POST',
       headers: {
         'Authorization': `AccessKey ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        receiver: {
-          contacts: [
-            {
-              identifierKey: 'emailaddress',
-              identifierValue: to,
-            },
-          ],
-        },
-        body: {
-          type: 'html',
-          html: {
-            text: html,
-            metadata: {
-              subject,
-            },
-          },
-        },
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
