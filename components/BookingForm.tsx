@@ -70,6 +70,15 @@ export default function BookingForm() {
   // Google reCAPTCHA v3 state
   const [captchaLoaded, setCaptchaLoaded] = useState(false);
 
+  // Refs for form fields to scroll to on error
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const addressRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
   // Load Google reCAPTCHA v3 script
   useEffect(() => {
     if (!captchaLoaded) {
@@ -158,6 +167,105 @@ export default function BookingForm() {
         return codeVerified;
       default:
         return false;
+    }
+  };
+
+  // Validate and show errors with scroll to first error field
+  const validateAndShowErrors = (): boolean => {
+    if (step === 1) {
+      if (data.services.length === 0) {
+        setError('Por favor selecciona al menos un servicio');
+        return false;
+      }
+    }
+
+    if (step === 2) {
+      if (!data.date) {
+        setError('Por favor selecciona una fecha');
+        return false;
+      }
+      if (!data.time) {
+        setError('Por favor selecciona una hora');
+        return false;
+      }
+    }
+
+    if (step === 3) {
+      if (!data.name) {
+        setError('Por favor introduce tu nombre');
+        nameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        nameRef.current?.focus();
+        return false;
+      }
+      if (!data.email) {
+        setError('Por favor introduce tu email');
+        emailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        emailRef.current?.focus();
+        return false;
+      }
+      if (!validateEmail(data.email)) {
+        setError('Por favor introduce un email válido');
+        emailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        emailRef.current?.focus();
+        return false;
+      }
+      if (!data.password) {
+        setError('Por favor introduce una contraseña');
+        passwordRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        passwordRef.current?.focus();
+        return false;
+      }
+      if (!validatePasswordStrength(data.password)) {
+        setError('La contraseña debe tener mínimo 8 caracteres, 1 mayúscula, 1 minúscula y 1 número');
+        passwordRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        passwordRef.current?.focus();
+        return false;
+      }
+      if (!data.confirmPassword) {
+        setError('Por favor confirma tu contraseña');
+        confirmPasswordRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        confirmPasswordRef.current?.focus();
+        return false;
+      }
+      if (data.password !== data.confirmPassword) {
+        setError('Las contraseñas no coinciden');
+        confirmPasswordRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        confirmPasswordRef.current?.focus();
+        return false;
+      }
+      if (!data.phone) {
+        setError('Por favor introduce tu número de teléfono');
+        phoneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        phoneRef.current?.focus();
+        return false;
+      }
+      if (!validatePhone(data.phone)) {
+        setError('Formato de teléfono inválido. Usa el formato: +34 6XX XXX XXX');
+        phoneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        phoneRef.current?.focus();
+        return false;
+      }
+      if (!data.address) {
+        setError('Por favor introduce la dirección del servicio');
+        addressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        addressRef.current?.focus();
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Handle next button click - validate first, then proceed
+  const handleNextClick = () => {
+    if (validateAndShowErrors()) {
+      setStep(step + 1);
+      setError('');
+    } else {
+      // Scroll to error message after a short delay
+      setTimeout(() => {
+        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
     }
   };
 
@@ -357,7 +465,7 @@ export default function BookingForm() {
 
       <div className="p-6">
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div ref={errorRef} className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -460,6 +568,7 @@ export default function BookingForm() {
                   Nombre completo *
                 </label>
                 <input
+                  ref={nameRef}
                   type="text"
                   value={data.name}
                   onChange={(e) => updateData('name', e.target.value)}
@@ -475,6 +584,7 @@ export default function BookingForm() {
                   Email *
                 </label>
                 <input
+                  ref={emailRef}
                   type="email"
                   value={data.email}
                   onChange={(e) => updateData('email', e.target.value)}
@@ -494,6 +604,7 @@ export default function BookingForm() {
                     Contraseña *
                   </label>
                   <input
+                    ref={passwordRef}
                     type="password"
                     value={data.password}
                     onChange={(e) => updateData('password', e.target.value)}
@@ -512,6 +623,7 @@ export default function BookingForm() {
                     Confirmar contraseña *
                   </label>
                   <input
+                    ref={confirmPasswordRef}
                     type="password"
                     value={data.confirmPassword}
                     onChange={(e) => updateData('confirmPassword', e.target.value)}
@@ -531,6 +643,7 @@ export default function BookingForm() {
                   Teléfono móvil *
                 </label>
                 <input
+                  ref={phoneRef}
                   type="tel"
                   value={data.phone}
                   onChange={(e) => updateData('phone', e.target.value)}
@@ -550,6 +663,7 @@ export default function BookingForm() {
                   Dirección del servicio *
                 </label>
                 <input
+                  ref={addressRef}
                   type="text"
                   value={data.address}
                   onChange={(e) => updateData('address', e.target.value)}
@@ -699,13 +813,8 @@ export default function BookingForm() {
 
           {step < 4 ? (
             <button
-              onClick={() => setStep(step + 1)}
-              disabled={!canProceed()}
-              className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-                canProceed()
-                  ? 'bg-[#059669] text-white hover:bg-[#047857]'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
+              onClick={handleNextClick}
+              className="flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-colors bg-[#059669] text-white hover:bg-[#047857]"
             >
               <span>Siguiente</span>
               <ArrowRight className="h-5 w-5" />
