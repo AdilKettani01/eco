@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Raleway } from 'next/font/google';
+import { GoogleAnalytics } from '@next/third-parties/google';
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -35,22 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <head>
-        <script
-          async
-          src="https://www.googletagmanager.com/gtag/js?id=AW-17907837198"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'AW-17907837198');
-            `,
-          }}
-        />
-      </head>
+      <GoogleAnalytics gaId="AW-17907837198" />
       <body className={`${inter.variable} ${raleway.variable} antialiased`}>
         <Navbar />
         <main className="min-h-screen">
